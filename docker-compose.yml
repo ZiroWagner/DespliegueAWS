@@ -1,0 +1,38 @@
+version: '3.8'
+
+services:
+  postgres:
+    image: postgres:15-alpine
+    environment:
+      POSTGRES_USER: user
+      POSTGRES_PASSWORD: password
+      POSTGRES_DB: taskdb
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+  backend:
+    build: ./tm_backend
+    ports:
+      - "3001:3000"
+    environment:
+      DATABASE_URL: "postgresql://user:password@postgres:5432/taskdb?schema=public"
+      AWS_REGION: "us-east-1"
+      AWS_ACCESS_KEY_ID: "test" # Solo para local
+      AWS_SECRET_ACCESS_KEY: "test" # Solo para local
+      AWS_BUCKET_NAME: "test-bucket"
+    depends_on:
+      - postgres
+
+  frontend:
+    build: ./tm_frontend
+    ports:
+      - "3000:3000"
+    environment:
+      NEXT_PUBLIC_API_URL: "http://localhost:3001"
+    depends_on:
+      - backend
+
+volumes:
+  postgres_data:
