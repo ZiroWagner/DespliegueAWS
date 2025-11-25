@@ -294,14 +294,14 @@ service docker start
 usermod -a -G docker ec2-user
 
 # Login ECR
-aws ecr get-login-password --region us-east-1 | docker login --username AWS --password-stdin <ACCOUNT_ID>.dkr.ecr.us-east-1.amazonaws.com
+aws ecr get-login-password --region us-east-1 | docker login --username AWS --password-stdin 752651455582.dkr.ecr.us-east-1.amazonaws.com
 
 # Run Backend
 docker run -d -p 3000:3000 \
-  -e DATABASE_URL="postgresql://postgres:<PASSWORD>@<RDS_ENDPOINT>:5432/taskdb?schema=public" \
+  -e DATABASE_URL="postgresql://postgres:adminpostgres@task-db.chsn7cq8j8gq.us-east-1.rds.amazonaws.com:5432/taskdb?schema=public" \
   -e AWS_REGION="us-east-1" \
-  -e AWS_BUCKET_NAME="<BUCKET_NAME>" \
-  <ACCOUNT_ID>.dkr.ecr.us-east-1.amazonaws.com/tm-backend:latest
+  -e AWS_BUCKET_NAME="mi-task-app-storage-123" \
+  752651455582.dkr.ecr.us-east-1.amazonaws.com/tm-backend:latest
 ```
 
 **Script Frontend (user-data-frontend.sh)**:
@@ -313,12 +313,12 @@ service docker start
 usermod -a -G docker ec2-user
 
 # Login ECR
-aws ecr get-login-password --region us-east-1 | docker login --username AWS --password-stdin <ACCOUNT_ID>.dkr.ecr.us-east-1.amazonaws.com
+aws ecr get-login-password --region us-east-1 | docker login --username AWS --password-stdin 752651455582.dkr.ecr.us-east-1.amazonaws.com
 
 # Run Frontend
 docker run -d -p 3000:3000 \
-  -e NEXT_PUBLIC_API_URL="http://<BACKEND_PRIVATE_IP>:3000" \
-  <ACCOUNT_ID>.dkr.ecr.us-east-1.amazonaws.com/tm-frontend:latest
+  -e NEXT_PUBLIC_API_URL="http://172.31.23.153:3000" \
+  752651455582.dkr.ecr.us-east-1.amazonaws.com/tm-frontend:latest
 ```
 
 ### 5.3 Lanzar Instancias
