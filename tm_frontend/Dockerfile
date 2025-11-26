@@ -34,7 +34,7 @@ USER nextjs
 # ⬇️⬇️ AGREGA ESTO ⬇️⬇️
 # Copiar script de arranque
 COPY start.sh /app/start.sh
-RUN chmod +x /app/start.sh
+RUN sudo chmod +x /app/start.sh
 
 EXPOSE 3000
 ENV PORT=3000
