@@ -370,5 +370,3 @@ docker run -d -p 3000:3000 \
 - **Error 502 Bad Gateway**: Revisa si los contenedores en las instancias Frontend están corriendo (`docker ps`). Revisa los logs (`docker logs <container_id>`).
 - **Error de conexión a DB**: Verifica que el Security Group de RDS permita tráfico desde el Security Group del Backend.
 - **Error de S3**: Verifica que el rol IAM tenga permisos y que el nombre del bucket sea correcto.
-
-¡Felicidades! Has desplegado una arquitectura escalable y segura en AWS Free Tier.
