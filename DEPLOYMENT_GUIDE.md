@@ -336,6 +336,7 @@ Requires=docker.service
 [Service]
 Restart=always
 ExecStartPre=-/usr/bin/docker rm -f $CONTAINER_NAME
+ExecStartPre=-/usr/bin/docker pull 752651455582.dkr.ecr.us-east-1.amazonaws.com/tm-backend:latest
 ExecStart=/usr/bin/docker run --name $CONTAINER_NAME \
     -p 3000:3000 \
     -e DATABASE_URL="$DATABASE_URL" \
@@ -369,7 +370,11 @@ ECR_ACCOUNT_ID="752651455582"
 REGION="us-east-1"
 FRONTEND_IMAGE="tm-frontend:latest"
 CONTAINER_NAME="frontend"
-NEXT_PUBLIC_API_URL="http://172.31.30.254:3000"  # IP privada del backend
+
+# Apunta al backend. Usa IP privada o DNS público según tu arquitectura
+NEXT_PUBLIC_API_URL="http://172.31.30.254:3000"  # <- Ajusta si tu backend cambia
+
+export NEXT_PUBLIC_API_URL
 
 # ===========================
 # 1️⃣ Instalar Docker
@@ -378,7 +383,7 @@ dnf update -y
 dnf install -y docker
 
 # ===========================
-# 2️⃣ Iniciar Docker
+# 2️⃣ Iniciar y habilitar Docker
 # ===========================
 systemctl enable docker
 systemctl start docker
@@ -400,11 +405,19 @@ Requires=docker.service
 
 [Service]
 Restart=always
-Environment="NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL"
-ExecStart=/usr/bin/docker run --rm -p 3000:3000 \
-    -e NEXT_PUBLIC_API_URL=\$NEXT_PUBLIC_API_URL \
+
+# Antes de iniciar: borrar contenedor anterior
+ExecStartPre=-/usr/bin/docker rm -f $CONTAINER_NAME
+
+# Tirar la última imagen de ECR
+ExecStartPre=-/usr/bin/docker pull $ECR_ACCOUNT_ID.dkr.ecr.$REGION.amazonaws.com/$FRONTEND_IMAGE
+
+# Ejecutar el contenedor
+ExecStart=/usr/bin/docker run -d -p 3000:3000 \
+    -e NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL \
     --name $CONTAINER_NAME \
-    $ECR_ACCOUNT_ID.dkr.ecr.$REGION.amazonaws.com/$FRONTEND_IMAGE node server.js
+    $ECR_ACCOUNT_ID.dkr.ecr.$REGION.amazonaws.com/$FRONTEND_IMAGE
+
 ExecStop=/usr/bin/docker stop $CONTAINER_NAME
 
 [Install]

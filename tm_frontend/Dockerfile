@@ -26,12 +26,18 @@ RUN adduser --system --uid 1001 nextjs
 
 # Copia artefactos del build standalone
 COPY --from=builder /app/public ./public
-COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
+COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./	
 COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
 
 USER nextjs
 
+# ⬇️⬇️ AGREGA ESTO ⬇️⬇️
+# Copiar script de arranque
+COPY start.sh /app/start.sh
+RUN chmod +x /app/start.sh
+
 EXPOSE 3000
 ENV PORT=3000
 
-CMD ["node", "server.js"]
+# Usar el script en lugar de server.js directo
+CMD ["/app/start.sh"]
