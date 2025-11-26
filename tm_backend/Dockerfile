@@ -6,6 +6,8 @@ WORKDIR /app
 COPY package*.json ./
 COPY prisma ./prisma/
 
+RUN apt-get update && apt-get install -y libssl3 && rm -rf /var/lib/apt/lists/*
+
 RUN npm ci
 
 COPY . .
@@ -13,10 +15,14 @@ COPY . .
 RUN npx prisma generate
 RUN npm run build
 
+
 # Etapa de producción
 FROM node:20-slim
 
 WORKDIR /app
+
+# Necesario también en la imagen final
+RUN apt-get update && apt-get install -y libssl3 && rm -rf /var/lib/apt/lists/*
 
 COPY --from=builder /app/node_modules ./node_modules
 COPY --from=builder /app/package*.json ./
