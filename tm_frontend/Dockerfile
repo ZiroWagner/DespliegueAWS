@@ -29,12 +29,13 @@ COPY --from=builder /app/public ./public
 COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./	
 COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
 
-USER nextjs
-
-# ⬇️⬇️ AGREGA ESTO ⬇️⬇️
-# Copiar script de arranque
+# 🚨 Copiar script como root (sin chown)
 COPY start.sh /app/start.sh
-RUN sudo chmod +x /app/start.sh
+
+# 🔥 Dar permisos mientras todavía eres root
+RUN chmod 755 /app/start.sh
+
+USER nextjs
 
 EXPOSE 3000
 ENV PORT=3000
