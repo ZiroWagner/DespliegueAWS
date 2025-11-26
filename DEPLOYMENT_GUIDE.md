@@ -288,37 +288,132 @@ Prepara estos scripts para automatizar la instalación al iniciar las instancias
 **Script Backend (user-data-backend.sh)**:
 ```bash
 #!/bin/bash
-yum update -y
-yum install -y docker
-service docker start
-usermod -a -G docker ec2-user
 
-# Login ECR
-aws ecr get-login-password --region us-east-1 | docker login --username AWS --password-stdin 752651455582.dkr.ecr.us-east-1.amazonaws.com
+# ===========================
+# Variables
+# ===========================
+ECR_ACCOUNT_ID="752651455582"
+REGION="us-east-1"
+BACKEND_IMAGE="tm-backend:latest"
+CONTAINER_NAME="backend"
 
-# Run Backend
-docker run -d -p 3000:3000 \
-  -e DATABASE_URL="postgresql://postgres:adminpostgres@task-db.chsn7cq8j8gq.us-east-1.rds.amazonaws.com:5432/taskdb?schema=public" \
-  -e AWS_REGION="us-east-1" \
-  -e AWS_BUCKET_NAME="mi-task-app-storage-123" \
-  752651455582.dkr.ecr.us-east-1.amazonaws.com/tm-backend:latest
+# Variables de entorno para el backend
+DATABASE_URL="postgresql://postgres:adminpostgres@task-db.chsn7cq8j8gq.us-east-1.rds.amazonaws.com:5432/taskdb?schema=public"
+AWS_REGION="us-east-1"
+AWS_BUCKET_NAME="mi-task-app-storage-123"
+
+# ===========================
+# 1️⃣ Instalar Docker
+# ===========================
+dnf update -y
+dnf install -y docker
+
+# ===========================
+# 2️⃣ Iniciar y habilitar Docker
+# ===========================
+systemctl enable docker
+systemctl start docker
+
+# Agregar ec2-user al grupo docker (opcional)
+usermod -aG docker ec2-user
+
+# ===========================
+# 3️⃣ Login a ECR
+# ===========================
+aws ecr get-login-password --region $REGION | docker login --username AWS --password-stdin $ECR_ACCOUNT_ID.dkr.ecr.$REGION.amazonaws.com
+
+# ===========================
+# 4️⃣ Crear systemd service para Backend
+# ===========================
+cat <<EOF > /etc/systemd/system/backend.service
+[Unit]
+Description=Backend Docker Container
+After=docker.service
+Requires=docker.service
+
+[Service]
+Restart=always
+ExecStartPre=-/usr/bin/docker rm -f $CONTAINER_NAME
+ExecStart=/usr/bin/docker run -d -p 3000:3000 \
+    -e DATABASE_URL=$DATABASE_URL \
+    -e AWS_REGION=$AWS_REGION \
+    -e AWS_BUCKET_NAME=$AWS_BUCKET_NAME \
+    --name $CONTAINER_NAME \
+    $ECR_ACCOUNT_ID.dkr.ecr.$REGION.amazonaws.com/$BACKEND_IMAGE
+ExecStop=/usr/bin/docker stop $CONTAINER_NAME
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+# ===========================
+# 5️⃣ Habilitar y arrancar el servicio
+# ===========================
+systemctl daemon-reload
+systemctl enable backend.service
+systemctl start backend.service
+
 ```
 
 **Script Frontend (user-data-frontend.sh)**:
 ```bash
 #!/bin/bash
-yum update -y
-yum install -y docker
-service docker start
-usermod -a -G docker ec2-user
 
-# Login ECR
-aws ecr get-login-password --region us-east-1 | docker login --username AWS --password-stdin 752651455582.dkr.ecr.us-east-1.amazonaws.com
+# ===========================
+# Variables
+# ===========================
+ECR_ACCOUNT_ID="752651455582"
+REGION="us-east-1"
+FRONTEND_IMAGE="tm-frontend:latest"
+CONTAINER_NAME="frontend"
+NEXT_PUBLIC_API_URL="http://<BACKEND_PRIVATE_IP>:3000"   # Cambia si tu backend tiene otra IP
 
-# Run Frontend
-docker run -d -p 3000:3000 \
-  -e NEXT_PUBLIC_API_URL="http://172.31.23.153:3000" \
-  752651455582.dkr.ecr.us-east-1.amazonaws.com/tm-frontend:latest
+# ===========================
+# 1️⃣ Instalar Docker
+# ===========================
+dnf update -y
+dnf install -y docker
+
+# ===========================
+# 2️⃣ Iniciar y habilitar Docker
+# ===========================
+systemctl enable docker
+systemctl start docker
+
+# Agregar ec2-user al grupo docker (opcional)
+usermod -aG docker ec2-user
+
+# ===========================
+# 3️⃣ Login a ECR
+# ===========================
+aws ecr get-login-password --region $REGION | docker login --username AWS --password-stdin $ECR_ACCOUNT_ID.dkr.ecr.$REGION.amazonaws.com
+
+# ===========================
+# 4️⃣ Crear systemd service para Frontend
+# ===========================
+cat <<EOF > /etc/systemd/system/frontend.service
+[Unit]
+Description=Frontend Docker Container
+After=docker.service
+Requires=docker.service
+
+[Service]
+Restart=always
+ExecStartPre=-/usr/bin/docker rm -f $CONTAINER_NAME
+ExecStart=/usr/bin/docker run -d -p 3000:3000 -e NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL --name $CONTAINER_NAME $ECR_ACCOUNT_ID.dkr.ecr.$REGION.amazonaws.com/$FRONTEND_IMAGE
+ExecStop=/usr/bin/docker stop $CONTAINER_NAME
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+# ===========================
+# 5️⃣ Habilitar y arrancar el servicio
+# ===========================
+systemctl daemon-reload
+systemctl enable frontend.service
+systemctl start frontend.service
+
 ```
 
 ### 5.3 Lanzar Instancias
