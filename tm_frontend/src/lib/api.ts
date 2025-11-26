@@ -1,7 +1,8 @@
 import axios from 'axios';
 
+// Usa la variable de entorno que definiste en Next.js
 const api = axios.create({
-    baseURL: 'http://localhost:3000',
+    baseURL: process.env.NEXT_PUBLIC_API_URL,
 });
 
 api.interceptors.request.use((config) => {

@@ -369,7 +369,7 @@ ECR_ACCOUNT_ID="752651455582"
 REGION="us-east-1"
 FRONTEND_IMAGE="tm-frontend:latest"
 CONTAINER_NAME="frontend"
-NEXT_PUBLIC_API_URL="http://<BACKEND_PRIVATE_IP>:3000"   # Cambia si tu backend tiene otra IP Privada
+NEXT_PUBLIC_API_URL="http://172.31.30.254:3000"  # IP privada del backend
 
 # ===========================
 # 1️⃣ Instalar Docker
@@ -378,12 +378,10 @@ dnf update -y
 dnf install -y docker
 
 # ===========================
-# 2️⃣ Iniciar y habilitar Docker
+# 2️⃣ Iniciar Docker
 # ===========================
 systemctl enable docker
 systemctl start docker
-
-# Agregar ec2-user al grupo docker (opcional)
 usermod -aG docker ec2-user
 
 # ===========================
@@ -402,8 +400,11 @@ Requires=docker.service
 
 [Service]
 Restart=always
-ExecStartPre=-/usr/bin/docker rm -f $CONTAINER_NAME
-ExecStart=/usr/bin/docker run -d -p 3000:3000 -e NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL --name $CONTAINER_NAME $ECR_ACCOUNT_ID.dkr.ecr.$REGION.amazonaws.com/$FRONTEND_IMAGE
+Environment="NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL"
+ExecStart=/usr/bin/docker run --rm -p 3000:3000 \
+    -e NEXT_PUBLIC_API_URL=\$NEXT_PUBLIC_API_URL \
+    --name $CONTAINER_NAME \
+    $ECR_ACCOUNT_ID.dkr.ecr.$REGION.amazonaws.com/$FRONTEND_IMAGE node server.js
 ExecStop=/usr/bin/docker stop $CONTAINER_NAME
 
 [Install]
