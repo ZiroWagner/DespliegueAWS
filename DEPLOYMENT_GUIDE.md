@@ -299,12 +299,10 @@ BACKEND_IMAGE="tm-backend:latest"
 CONTAINER_NAME="backend"
 
 # Variables de entorno para el backend
-DATABASE_URL="postgresql://postgres:adminpostgres@task-db.chsn7cq8j8gq.us-east-1.rds.amazonaws.com:5432/taskdb?schema=public"
+DATABASE_URL="postgresql://postgres:adminpostgres@task-db.chsn7cq8j8gq.us-east-1.rds.amazonaws.com:5432/postgres?schema=public"
 AWS_REGION="us-east-1"
 AWS_BUCKET_NAME="mi-task-app-storage-123"
 GEMINI_API_KEY="AIzaSyCaS-KAd8BVBaV7A4Q5TUWk-qzQ4XEAwkI"
-
-export DATABASE_URL AWS_REGION AWS_BUCKET_NAME GEMINI_API_KEY
 
 # ===========================
 # 1️⃣ Instalar Docker
@@ -338,12 +336,12 @@ Requires=docker.service
 [Service]
 Restart=always
 ExecStartPre=-/usr/bin/docker rm -f $CONTAINER_NAME
-ExecStart=/usr/bin/docker run -d -p 3000:3000 \
-    -e DATABASE_URL=$DATABASE_URL \
-    -e AWS_REGION=$AWS_REGION \
-    -e AWS_BUCKET_NAME=$AWS_BUCKET_NAME \
-    -e GEMINI_API_KEY=$GEMINI_API_KEY \
-    --name $CONTAINER_NAME \
+ExecStart=/usr/bin/docker run --name $CONTAINER_NAME \
+    -p 3000:3000 \
+    -e DATABASE_URL="$DATABASE_URL" \
+    -e AWS_REGION="$AWS_REGION" \
+    -e AWS_BUCKET_NAME="$AWS_BUCKET_NAME" \
+    -e GEMINI_API_KEY="$GEMINI_API_KEY" \
     $ECR_ACCOUNT_ID.dkr.ecr.$REGION.amazonaws.com/$BACKEND_IMAGE
 ExecStop=/usr/bin/docker stop $CONTAINER_NAME
 
@@ -371,7 +369,7 @@ ECR_ACCOUNT_ID="752651455582"
 REGION="us-east-1"
 FRONTEND_IMAGE="tm-frontend:latest"
 CONTAINER_NAME="frontend"
-NEXT_PUBLIC_API_URL="http://<BACKEND_PRIVATE_IP>:3000"   # Cambia si tu backend tiene otra IP
+NEXT_PUBLIC_API_URL="http://<BACKEND_PRIVATE_IP>:3000"   # Cambia si tu backend tiene otra IP Privada
 
 # ===========================
 # 1️⃣ Instalar Docker
