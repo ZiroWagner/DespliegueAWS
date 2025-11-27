@@ -80,8 +80,28 @@ export default function UserProfileDialog({ open, onOpenChange }: UserProfileDia
     if (!user) return null;
 
     const storageUrl = api.defaults.baseURL || "";
+
+    const getAvatarUrl = (url: string | null | undefined) => {
+        if (!url) return undefined;
+        if (url.startsWith('http')) {
+            // Check if it's a legacy localhost URL or an internal upload
+            if (url.includes('localhost:8081') || url.includes('/uploads/')) {
+                try {
+                    const urlObj = new URL(url);
+                    return `${storageUrl}${urlObj.pathname}`;
+                } catch (e) {
+                    // If URL parsing fails but it has /uploads/, try to extract it
+                    const match = url.match(/(\/uploads\/.*)/);
+                    if (match) return `${storageUrl}${match[1]}`;
+                }
+            }
+            return url;
+        }
+        return `${storageUrl}${url}`;
+    };
+
     // Use previewUrl if available, otherwise fallback to user avatar
-    const avatarSrc = previewUrl || (user.avatarUrl ? (user.avatarUrl.startsWith('http') ? user.avatarUrl : `${storageUrl}${user.avatarUrl}`) : undefined);
+    const avatarSrc = previewUrl || getAvatarUrl(user.avatarUrl);
 
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>

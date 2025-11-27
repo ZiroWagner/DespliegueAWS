@@ -35,6 +35,23 @@ export default function TaskDetailDialog({ task, open, onOpenChange }: TaskDetai
 
     const storageUrl = api.defaults.baseURL || "";
 
+    const getFileUrl = (url: string) => {
+        if (!url) return "";
+        if (url.startsWith('http')) {
+            if (url.includes('localhost:8081') || url.includes('/uploads/')) {
+                try {
+                    const urlObj = new URL(url);
+                    return `${storageUrl}${urlObj.pathname}`;
+                } catch (e) {
+                    const match = url.match(/(\/uploads\/.*)/);
+                    if (match) return `${storageUrl}${match[1]}`;
+                }
+            }
+            return url;
+        }
+        return `${storageUrl}${url}`;
+    };
+
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
             <DialogContent className="sm:max-w-[600px] max-h-[80vh] overflow-y-auto">
@@ -83,7 +100,7 @@ export default function TaskDetailDialog({ task, open, onOpenChange }: TaskDetai
                                         {att.type === 'IMAGE' ? (
                                             <div className="aspect-video bg-muted rounded-md overflow-hidden relative">
                                                 <img
-                                                    src={att.url.startsWith('http') ? att.url : `${storageUrl}${att.url}`}
+                                                    src={getFileUrl(att.url)}
                                                     alt={att.filename}
                                                     className="object-cover w-full h-full"
                                                 />
@@ -99,7 +116,7 @@ export default function TaskDetailDialog({ task, open, onOpenChange }: TaskDetai
                                             </span>
                                             <div className="flex items-center">
                                                 <a
-                                                    href={att.url.startsWith('http') ? att.url : `${storageUrl}${att.url}`}
+                                                    href={getFileUrl(att.url)}
                                                     target="_blank"
                                                     rel="noopener noreferrer"
                                                     className="p-1 hover:bg-muted rounded"
