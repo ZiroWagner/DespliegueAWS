@@ -20,7 +20,17 @@ export class UploadsService {
         const sessionToken = this.configService.get<string>('AWS_SESSION_TOKEN');
         this.bucketName = this.configService.get<string>('AWS_BUCKET_NAME') || null;
 
-        if (region && accessKeyId && secretAccessKey && sessionToken && this.bucketName) {
+        console.log('Initializing UploadsService...');
+        console.log('AWS Config:', {
+            region,
+            hasAccessKey: !!accessKeyId,
+            hasSecretKey: !!secretAccessKey,
+            hasSessionToken: !!sessionToken,
+            bucketName: this.bucketName,
+        });
+
+        if (region && accessKeyId && secretAccessKey && this.bucketName) {
+            // sessionToken is optional
             this.s3Client = new S3Client({
                 region,
                 credentials: {
@@ -29,9 +39,13 @@ export class UploadsService {
                     sessionToken,
                 },
             });
+            console.log('S3 Client initialized successfully.');
+        } else {
+            console.warn('S3 Client NOT initialized. Missing required environment variables.');
         }
 
         if (!this.s3Client) {
+            console.log('Falling back to local storage.');
             this.ensureDirectoryExists(path.join(this.uploadsDir, 'avatars'));
             this.ensureDirectoryExists(path.join(this.uploadsDir, 'attachments'));
         }
@@ -55,6 +69,7 @@ export class UploadsService {
             .toBuffer();
 
         if (this.s3Client && this.bucketName) {
+            console.log('Saving avatar to S3...');
             const key = `avatars/${filename}`;
             await this.s3Client.send(new PutObjectCommand({
                 Bucket: this.bucketName,
@@ -66,6 +81,7 @@ export class UploadsService {
             // Return proxy URL
             return `/uploads/file/${key}`;
         } else {
+            console.log('Saving avatar to local storage...');
             const filepath = path.join(this.uploadsDir, 'avatars', filename);
             fs.writeFileSync(filepath, buffer);
             return `/uploads/avatars/${filename}`;
@@ -78,6 +94,7 @@ export class UploadsService {
         const sanitizedSegments = pathSegments.map(s => this.sanitizeName(s));
 
         if (this.s3Client && this.bucketName) {
+            console.log('Saving attachment to S3...');
             const key = `attachments/${sanitizedSegments.join('/')}/${filename}`;
 
             // Optimize if image
@@ -97,6 +114,7 @@ export class UploadsService {
                 filename: file.originalname,
             };
         } else {
+            console.log('Saving attachment to local storage...');
             const relativeDir = path.join('attachments', ...sanitizedSegments);
             const absoluteDir = path.join(this.uploadsDir, relativeDir);
             this.ensureDirectoryExists(absoluteDir);
