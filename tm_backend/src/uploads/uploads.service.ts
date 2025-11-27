@@ -17,14 +17,16 @@ export class UploadsService {
         const region = this.configService.get<string>('AWS_REGION');
         const accessKeyId = this.configService.get<string>('AWS_ACCESS_KEY_ID');
         const secretAccessKey = this.configService.get<string>('AWS_SECRET_ACCESS_KEY');
+        const sessionToken = this.configService.get<string>('AWS_SESSION_TOKEN');
         this.bucketName = this.configService.get<string>('AWS_BUCKET_NAME') || null;
 
-        if (region && accessKeyId && secretAccessKey && this.bucketName) {
+        if (region && accessKeyId && secretAccessKey && sessionToken && this.bucketName) {
             this.s3Client = new S3Client({
                 region,
                 credentials: {
                     accessKeyId,
                     secretAccessKey,
+                    sessionToken,
                 },
             });
         }
