@@ -11,16 +11,22 @@ export class UploadsController {
     @Get('file/*key')
     @ApiOperation({ summary: 'Get file from storage (S3 or local)' })
     async getFile(@Param('key') key: string, @Res() res: Response) {
-        // The key might contain slashes, so we need to capture the full path.
-        // NestJS wildcard param captures it but we might need to reconstruct if it's split.
-        // Actually, @Param('key') with *key in route should capture the rest.
-        // However, let's verify if 'key' comes as a string or array.
-        // In Express/NestJS, *key typically maps to params[0].
-        // Let's rely on @Param('key') being the wildcard content.
+        return this.streamFile(key, res);
+    }
 
-        // Note: key comes from URL, so it might be URL encoded?
-        // Usually framework decodes it.
+    @Get('avatars/:filename')
+    @ApiOperation({ summary: 'Get avatar (legacy route)' })
+    async getAvatar(@Param('filename') filename: string, @Res() res: Response) {
+        return this.streamFile(`avatars/${filename}`, res);
+    }
 
+    @Get('attachments/*path')
+    @ApiOperation({ summary: 'Get attachment (legacy route)' })
+    async getAttachment(@Param('path') path: string, @Res() res: Response) {
+        return this.streamFile(`attachments/${path}`, res);
+    }
+
+    private async streamFile(key: string, res: Response) {
         try {
             const { stream, contentType } = await this.uploadsService.getFileStream(key);
 
