@@ -44,12 +44,14 @@ Crea un archivo llamado `Dockerfile` en la raíz de `tm_backend`:
 
 ```dockerfile
 # Etapa de construcción
-FROM node:18-alpine AS builder
+FROM node:20-slim AS builder
 
 WORKDIR /app
 
 COPY package*.json ./
 COPY prisma ./prisma/
+
+RUN apt-get update && apt-get install -y libssl3 && rm -rf /var/lib/apt/lists/*
 
 RUN npm ci
 
@@ -58,21 +60,24 @@ COPY . .
 RUN npx prisma generate
 RUN npm run build
 
+
 # Etapa de producción
-FROM node:18-alpine
+FROM node:20-slim
 
 WORKDIR /app
+
+# Necesario también en la imagen final
+RUN apt-get update && apt-get install -y libssl3 && rm -rf /var/lib/apt/lists/*
 
 COPY --from=builder /app/node_modules ./node_modules
 COPY --from=builder /app/package*.json ./
 COPY --from=builder /app/dist ./dist
 COPY --from=builder /app/prisma ./prisma
 
-# Variables de entorno por defecto (serán sobreescritas en despliegue)
 ENV PORT=3000
 EXPOSE 3000
 
-CMD ["npm", "run", "start:prod"]
+CMD ["sh", "-c", "npx prisma migrate deploy && npm run start:prod"]
 ```
 
 ### 2.2 Frontend (Next.js)
@@ -82,33 +87,36 @@ Crea un archivo llamado `Dockerfile` en la raíz de `tm_frontend`.
 
 ```dockerfile
 # Etapa de dependencias
-FROM node:18-alpine AS deps
+FROM node:20.11-bullseye AS deps
 WORKDIR /app
 COPY package*.json ./
 RUN npm ci
 
 # Etapa de construcción
-FROM node:18-alpine AS builder
+FROM node:20.11-bullseye AS builder
 WORKDIR /app
+
+ARG NEXT_PUBLIC_API_URL
+ENV NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL}
+
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 
-# Deshabilita telemetría durante build
-ENV NEXT_TELEMETRY_DISABLED 1
+ENV NEXT_TELEMETRY_DISABLED=1
 
+RUN echo "Building with NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL}"
 RUN npm run build
 
 # Etapa de producción
-FROM node:18-alpine AS runner
+FROM node:20.11-bullseye AS runner
 WORKDIR /app
 
-ENV NODE_ENV production
-ENV NEXT_TELEMETRY_DISABLED 1
+ENV NODE_ENV=production
+ENV NEXT_TELEMETRY_DISABLED=1
 
 RUN addgroup --system --gid 1001 nodejs
 RUN adduser --system --uid 1001 nextjs
 
-# Copia solo los archivos necesarios del modo standalone
 COPY --from=builder /app/public ./public
 COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
 COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
@@ -116,14 +124,114 @@ COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
 USER nextjs
 
 EXPOSE 3000
-ENV PORT 3000
+ENV PORT=3000
 
 CMD ["node", "server.js"]
+
 ```
 
 ### 2.3 Docker Compose (Desarrollo Local)
 
 Crea un archivo `docker-compose.yml` en la raíz de tu proyecto (carpeta padre `DespliegueAWS`) para orquestar todo localmente.
+
+```yaml
+version: '3.8'
+
+services:
+  postgres:
+    image: postgres:15-alpine
+    environment:
+      POSTGRES_USER: user
+      POSTGRES_PASSWORD: password
+      POSTGRES_DB: taskdb
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+  backend:
+    build: ./tm_backend
+    ports:
+      - "3001:3000"
+    environment:
+      DATABASE_URL: "postgresql://user:password@postgres:5432/taskdb?schema=public"
+      AWS_REGION: "us-east-1"
+      AWS_ACCESS_KEY_ID: "test" # Solo para local
+      AWS_SECRET_ACCESS_KEY: "test" # Solo para local
+      AWS_BUCKET_NAME: "test-bucket"
+    depends_on:
+      - postgres
+
+  frontend:
+    build: ./tm_frontend
+    ports:
+      - "3000:3000"
+    environment:
+      NEXT_PUBLIC_API_URL: "http://localhost:3001"
+    depends_on:
+      - backend
+
+volumes:
+  postgres_data:
+```
+
+---
+
+## 3. Infraestructura AWS (Capa de Datos y Red)
+
+Sigue estos pasos en la consola de AWS.
+
+### 3.1 Red y Seguridad
+1. **VPC**: Puedes usar la VPC por defecto (`default`) para simplificar.
+2. **Security Groups (SG)**:
+   - **SG-ALB**: Permite entrada HTTP (80) desde `0.0.0.0/0`.
+   - **SG-Frontend**: Permite entrada TCP (3000) desde **SG-ALB**.
+   - **SG-Backend**: Permite entrada TCP (3000) desde **SG-Frontend**.
+   - **SG-RDS**: Permite entrada TCP (5432) desde **SG-Backend**.
+
+### 3.2 Base de Datos (RDS)
+1. Ve a **RDS** -> **Create database**.
+2. Selecciona **PostgreSQL** y la versión (ej. 16.x).
+3. En **Templates**, elige **Free tier**.
+4. **Settings**:
+   - DB instance identifier: `task-db`
+   - Master username: `postgres`
+   - Master password: Crea una contraseña segura.
+5. **Instance configuration**: `db.t3.micro` o `db.t4g.micro`.
+6. **Connectivity**:
+   - Public access: **No**.
+   - VPC Security Group: Selecciona **SG-RDS**.
+7. Crea la base de datos y anota el **Endpoint** cuando esté disponible.
+
+### 3.3 Almacenamiento (S3)
+1. Ve a **S3** -> **Create bucket**.
+2. Nombre único: ej. `mi-task-app-storage-123`.
+3. **Block Public Access**: Mantenlo activado (Bloquear todo) por seguridad. Usaremos credenciales de IAM para acceder.
+4. Crea el bucket.
+
+### 3.4 Repositorios ECR
+1. Ve a **ECR** -> **Create repository**.
+2. Crea uno llamado `tm-frontend` (Visibilidad: Private).
+3. Crea otro llamado `tm-backend` (Visibilidad: Private).
+4. Anota las URIs (ej. `123456789012.dkr.ecr.us-east-1.amazonaws.com/tm-backend`).
+
+---
+
+## 4. CI/CD con GitHub Actions
+
+Configuraremos GitHub Actions para construir y subir las imágenes automáticamente.
+
+### 4.1 Secretos en GitHub
+En tu repositorio de GitHub, ve a **Settings** -> **Secrets and variables** -> **Actions** y agrega:
+- `AWS_ACCESS_KEY_ID`: Tu Access Key.
+- `AWS_SECRET_ACCESS_KEY`: Tu Secret Key.
+- `AWS_SESSION_TOKEN`: Tu Session Token.
+- `FRONTEND_API_URL`: URL de la API (ej. `http://localhost:3001`).
+- `ECR_REPOSITORY_FRONTEND`: Nombre del repo frontend (ej. `tm-frontend`).
+- `ECR_REPOSITORY_BACKEND`: Nombre del repo backend (ej. `tm-backend`).
+
+### 4.2 Workflow
+Crea el archivo `.github/workflows/deploy.yml`:
 
 ```yaml
 name: Build and Push to ECR
@@ -182,108 +290,7 @@ jobs:
           ./tm_frontend
 
         docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
-```
 
----
-
-## 3. Infraestructura AWS (Capa de Datos y Red)
-
-Sigue estos pasos en la consola de AWS.
-
-### 3.1 Red y Seguridad
-1. **VPC**: Puedes usar la VPC por defecto (`default`) para simplificar.
-2. **Security Groups (SG)**:
-   - **SG-ALB**: Permite entrada HTTP (80) desde `0.0.0.0/0`.
-   - **SG-Frontend**: Permite entrada TCP (3000) desde **SG-ALB**.
-   - **SG-Backend**: Permite entrada TCP (3000) desde **SG-Frontend**.
-   - **SG-RDS**: Permite entrada TCP (5432) desde **SG-Backend**.
-
-### 3.2 Base de Datos (RDS)
-1. Ve a **RDS** -> **Create database**.
-2. Selecciona **PostgreSQL** y la versión (ej. 16.x).
-3. En **Templates**, elige **Free tier**.
-4. **Settings**:
-   - DB instance identifier: `task-db`
-   - Master username: `postgres`
-   - Master password: Crea una contraseña segura.
-5. **Instance configuration**: `db.t3.micro` o `db.t4g.micro`.
-6. **Connectivity**:
-   - Public access: **No**.
-   - VPC Security Group: Selecciona **SG-RDS**.
-7. Crea la base de datos y anota el **Endpoint** cuando esté disponible.
-
-### 3.3 Almacenamiento (S3)
-1. Ve a **S3** -> **Create bucket**.
-2. Nombre único: ej. `mi-task-app-storage-123`.
-3. **Block Public Access**: Mantenlo activado (Bloquear todo) por seguridad. Usaremos credenciales de IAM para acceder.
-4. Crea el bucket.
-
-### 3.4 Repositorios ECR
-1. Ve a **ECR** -> **Create repository**.
-2. Crea uno llamado `tm-frontend` (Visibilidad: Private).
-3. Crea otro llamado `tm-backend` (Visibilidad: Private).
-4. Anota las URIs (ej. `123456789012.dkr.ecr.us-east-1.amazonaws.com/tm-backend`).
-
----
-
-## 4. CI/CD con GitHub Actions
-
-Configuraremos GitHub Actions para construir y subir las imágenes automáticamente.
-
-### 4.1 Secretos en GitHub
-En tu repositorio de GitHub, ve a **Settings** -> **Secrets and variables** -> **Actions** y agrega:
-- `AWS_ACCESS_KEY_ID`: Tu Access Key.
-- `AWS_SECRET_ACCESS_KEY`: Tu Secret Key.
-- `AWS_REGION`: Tu región (ej. `us-east-1`).
-- `ECR_REPOSITORY_FRONTEND`: Nombre del repo frontend (ej. `tm-frontend`).
-- `ECR_REPOSITORY_BACKEND`: Nombre del repo backend (ej. `tm-backend`).
-
-### 4.2 Workflow
-Crea el archivo `.github/workflows/deploy.yml`:
-
-```yaml
-name: Build and Push to ECR
-
-on:
-  push:
-    branches: [ "main" ]
-
-jobs:
-  build-and-push:
-    runs-on: ubuntu-latest
-    steps:
-    - name: Checkout code
-      uses: actions/checkout@v3
-
-    - name: Configure AWS credentials
-      uses: aws-actions/configure-aws-credentials@v1
-      with:
-        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-        aws-session-token: ${{ secrets.AWS_SESSION_TOKEN }}
-        aws-region: us-east-1
-
-    - name: Login to Amazon ECR
-      id: login-ecr
-      uses: aws-actions/amazon-ecr-login@v1
-
-    - name: Build, tag, and push Backend image
-      env:
-        ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
-        ECR_REPOSITORY: ${{ secrets.ECR_REPOSITORY_BACKEND }}
-        IMAGE_TAG: latest
-      run: |
-        docker build -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG ./tm_backend
-        docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
-
-    - name: Build, tag, and push Frontend image
-      env:
-        ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
-        ECR_REPOSITORY: ${{ secrets.ECR_REPOSITORY_FRONTEND }}
-        IMAGE_TAG: latest
-      run: |
-        docker build -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG ./tm_frontend
-        docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
 ```
 
 ---

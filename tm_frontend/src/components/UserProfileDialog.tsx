@@ -78,7 +78,7 @@ export default function UserProfileDialog({ open, onOpenChange }: UserProfileDia
 
     if (!user) return null;
 
-    const storageUrl = "http://localhost:8081";
+    const storageUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001";
     // Use previewUrl if available, otherwise fallback to user avatar
     const avatarSrc = previewUrl || (user.avatarUrl ? (user.avatarUrl.startsWith('http') ? user.avatarUrl : `${storageUrl}${user.avatarUrl}`) : undefined);
 

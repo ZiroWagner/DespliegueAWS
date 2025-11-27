@@ -3,8 +3,11 @@ import { UploadsService } from './uploads.service';
 
 import { ConfigModule } from '@nestjs/config';
 
+import { UploadsController } from './uploads.controller';
+
 @Module({
     imports: [ConfigModule],
+    controllers: [UploadsController],
     providers: [UploadsService],
     exports: [UploadsService],
 })

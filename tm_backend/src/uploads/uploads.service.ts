@@ -4,7 +4,8 @@ import * as sharp from 'sharp';
 import * as fs from 'fs';
 import * as path from 'path';
 import { v4 as uuidv4 } from 'uuid';
-import { S3Client, PutObjectCommand, DeleteObjectCommand, DeleteObjectsCommand, ListObjectsV2Command } from '@aws-sdk/client-s3';
+import { S3Client, PutObjectCommand, DeleteObjectCommand, DeleteObjectsCommand, ListObjectsV2Command, GetObjectCommand } from '@aws-sdk/client-s3';
+import { Readable } from 'stream';
 
 @Injectable()
 export class UploadsService {
@@ -60,16 +61,8 @@ export class UploadsService {
                 ContentType: 'image/webp',
                 // ACL: 'public-read', // Optional, depends on bucket settings
             }));
-            // Return full URL if S3, or just path? 
-            // Frontend expects /uploads/... so we might need a proxy or return full URL.
-            // If we return full URL, frontend needs to handle it.
-            // Let's assume we return the key and frontend handles it, OR return full URL.
-            // Current frontend prepends storageUrl.
-            // If we return a full URL (https://...), frontend prepending localhost will break it.
-            // We should probably return the relative path and let a controller proxy it, OR change frontend.
-            // For now, let's return the key prefixed with /s3/ or similar to distinguish?
-            // Or better: return the full URL and update frontend to not prepend if it starts with http.
-            return `https://${this.bucketName}.s3.amazonaws.com/${key}`;
+            // Return proxy URL
+            return `/uploads/file/${key}`;
         } else {
             const filepath = path.join(this.uploadsDir, 'avatars', filename);
             fs.writeFileSync(filepath, buffer);
@@ -97,7 +90,7 @@ export class UploadsService {
             }));
 
             return {
-                url: `https://${this.bucketName}.s3.amazonaws.com/${key}`,
+                url: `/uploads/file/${key}`,
                 type: isImage ? 'IMAGE' : 'FILE',
                 filename: file.originalname,
             };
@@ -118,13 +111,24 @@ export class UploadsService {
     }
 
     async deleteFile(fileUrl: string) {
-        if (this.s3Client && this.bucketName && fileUrl.startsWith('http')) {
+        if (this.s3Client && this.bucketName && fileUrl.startsWith('/uploads/file/')) {
             try {
-                // Extract key from URL
-                // URL: https://bucket.s3.amazonaws.com/key
-                const url = new URL(fileUrl);
-                const key = url.pathname.substring(1); // Remove leading /
+                // Extract key from proxy URL
+                // URL: /uploads/file/key
+                const key = fileUrl.replace('/uploads/file/', '');
 
+                await this.s3Client.send(new DeleteObjectCommand({
+                    Bucket: this.bucketName,
+                    Key: key,
+                }));
+            } catch (error) {
+                console.error(`Error deleting S3 file ${fileUrl}:`, error);
+            }
+        } else if (this.s3Client && this.bucketName && fileUrl.startsWith('http')) {
+            // Fallback for old full URLs if any
+            try {
+                const url = new URL(fileUrl);
+                const key = url.pathname.substring(1);
                 await this.s3Client.send(new DeleteObjectCommand({
                     Bucket: this.bucketName,
                     Key: key,
@@ -179,6 +183,35 @@ export class UploadsService {
             } catch (error) {
                 console.error(`Error deleting local folder ${pathSegments.join('/')}:`, error);
             }
+        }
+    }
+
+    async getFileStream(key: string): Promise<{ stream: Readable; contentType: string }> {
+        if (this.s3Client && this.bucketName) {
+            try {
+                const command = new GetObjectCommand({
+                    Bucket: this.bucketName,
+                    Key: key,
+                });
+                const response = await this.s3Client.send(command);
+                return {
+                    stream: response.Body as Readable,
+                    contentType: response.ContentType || 'application/octet-stream',
+                };
+            } catch (error) {
+                console.error(`Error getting file stream from S3 for key ${key}:`, error);
+                throw error;
+            }
+        } else {
+            // Local fallback
+            const filePath = path.join(this.uploadsDir, key);
+            if (fs.existsSync(filePath)) {
+                return {
+                    stream: fs.createReadStream(filePath),
+                    contentType: 'application/octet-stream', // Could detect mime type if needed
+                };
+            }
+            throw new Error('File not found');
         }
     }
 }

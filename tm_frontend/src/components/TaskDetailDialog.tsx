@@ -32,7 +32,7 @@ export default function TaskDetailDialog({ task, open, onOpenChange }: TaskDetai
         }
     };
 
-    const storageUrl = "http://localhost:8081";
+    const storageUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001";
 
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
