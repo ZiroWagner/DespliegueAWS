@@ -126,44 +126,62 @@ CMD ["node", "server.js"]
 Crea un archivo `docker-compose.yml` en la raíz de tu proyecto (carpeta padre `DespliegueAWS`) para orquestar todo localmente.
 
 ```yaml
-version: '3.8'
+name: Build and Push to ECR
 
-services:
-  postgres:
-    image: postgres:15-alpine
-    environment:
-      POSTGRES_USER: user
-      POSTGRES_PASSWORD: password
-      POSTGRES_DB: taskdb
-    ports:
-      - "5432:5432"
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
+on:
+  push:
+    branches: [ "main" ]
 
-  backend:
-    build: ./tm_backend
-    ports:
-      - "3001:3000"
-    environment:
-      DATABASE_URL: "postgresql://user:password@postgres:5432/taskdb?schema=public"
-      AWS_REGION: "us-east-1"
-      AWS_ACCESS_KEY_ID: "test" # Solo para local
-      AWS_SECRET_ACCESS_KEY: "test" # Solo para local
-      AWS_BUCKET_NAME: "test-bucket"
-    depends_on:
-      - postgres
+jobs:
+  build-and-push:
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v3
 
-  frontend:
-    build: ./tm_frontend
-    ports:
-      - "3000:3000"
-    environment:
-      NEXT_PUBLIC_API_URL: "http://localhost:3001"
-    depends_on:
-      - backend
+    - name: Configure AWS credentials
+      uses: aws-actions/configure-aws-credentials@v1
+      with:
+        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        aws-session-token: ${{ secrets.AWS_SESSION_TOKEN }}
+        aws-region: us-east-1
 
-volumes:
-  postgres_data:
+    - name: Login to Amazon ECR
+      id: login-ecr
+      uses: aws-actions/amazon-ecr-login@v1
+
+    # ----------------------------
+    # Build & Push BACKEND
+    # ----------------------------
+    - name: Build, tag, and push Backend image
+      env:
+        ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+        ECR_REPOSITORY: ${{ secrets.ECR_REPOSITORY_BACKEND }}
+        IMAGE_TAG: latest
+      run: |
+        echo "Building BACKEND image..."
+        docker build -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG ./tm_backend
+        docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
+
+    # ----------------------------
+    # Build & Push FRONTEND
+    # ----------------------------
+    - name: Build, tag, and push Frontend image
+      env:
+        ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+        ECR_REPOSITORY: ${{ secrets.ECR_REPOSITORY_FRONTEND }}
+        IMAGE_TAG: latest
+      run: |
+        echo "Building FRONTEND image using API URL:"
+        echo ${{ secrets.FRONTEND_API_URL }}
+
+        docker build \
+          --build-arg NEXT_PUBLIC_API_URL=${{ secrets.FRONTEND_API_URL }} \
+          -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG \
+          ./tm_frontend
+
+        docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
 ```
 
 ---
