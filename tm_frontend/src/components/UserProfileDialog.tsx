@@ -12,6 +12,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Camera } from "lucide-react";
+import api from "@/lib/api";
 
 interface UserProfileDialogProps {
     open: boolean;
@@ -78,7 +79,7 @@ export default function UserProfileDialog({ open, onOpenChange }: UserProfileDia
 
     if (!user) return null;
 
-    const storageUrl = process.env.NEXT_PUBLIC_API_URL;
+    const storageUrl = api.defaults.baseURL || "";
     // Use previewUrl if available, otherwise fallback to user avatar
     const avatarSrc = previewUrl || (user.avatarUrl ? (user.avatarUrl.startsWith('http') ? user.avatarUrl : `${storageUrl}${user.avatarUrl}`) : undefined);
 

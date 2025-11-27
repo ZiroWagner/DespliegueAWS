@@ -6,6 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Paperclip, X, FileIcon, ImageIcon, Download } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
+import api from "@/lib/api";
 
 interface TaskDetailDialogProps {
     task: Task;
@@ -32,7 +33,7 @@ export default function TaskDetailDialog({ task, open, onOpenChange }: TaskDetai
         }
     };
 
-    const storageUrl = process.env.NEXT_PUBLIC_API_URL;
+    const storageUrl = api.defaults.baseURL || "";
 
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
