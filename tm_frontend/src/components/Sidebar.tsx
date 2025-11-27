@@ -25,6 +25,7 @@ import UserProfileDialog from "@/components/UserProfileDialog";
 import { useAuthStore } from "@/store/auth";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { User } from "lucide-react";
+import api from "@/lib/api";
 
 export default function Sidebar() {
     const { projects, fetchProjects, createProject, updateProject, deleteProject, selectProject, selectedProjectId } = useProjectStore();
@@ -89,7 +90,7 @@ export default function Sidebar() {
             .slice(0, 2);
     };
 
-    const storageUrl = "http://localhost:8081";
+    const storageUrl = api.defaults.baseURL || "";
     const avatarSrc = user?.avatarUrl ? `${storageUrl}${user.avatarUrl}` : undefined;
 
     return (
