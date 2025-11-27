@@ -32,4 +32,4 @@ COPY --from=builder /app/prisma ./prisma
 ENV PORT=3000
 EXPOSE 3000
 
-CMD ["npm", "run", "start:prod"]
+CMD ["sh", "-c", "npx prisma migrate deploy && npm run start:prod"]
