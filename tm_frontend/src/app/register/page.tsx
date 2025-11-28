@@ -51,7 +51,7 @@ export default function RegisterPage() {
     }
 
     return (
-        <div className="min-h-screen flex items-center justify-center overflow-hidden relative selection:bg-gray-700 selection:text-white bg-black text-white font-sans">
+        <div className="min-h-screen flex items-center justify-center overflow-hidden relative selection:bg-gray-700 selection:text-white text-white font-sans">
 
             {/* Sophisticated Background */}
             <div className="fog-container">
