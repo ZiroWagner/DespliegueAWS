@@ -54,7 +54,7 @@ export default function TaskDetailDialog({ task, open, onOpenChange }: TaskDetai
 
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
-            <DialogContent className="sm:max-w-[600px] max-h-[80vh] overflow-y-auto no-scrollbar">
+            <DialogContent className="sm:max-w-[600px] max-h-[80vh] overflow-y-auto">
                 <DialogHeader>
                     <DialogTitle className="text-xl">{task.title}</DialogTitle>
                     <div className="flex gap-2 mt-2">
